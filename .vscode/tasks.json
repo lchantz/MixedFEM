@@ -6,7 +6,7 @@
             "type": "shell",
             "command": "make compile",
             "options": {
-                "cwd": "${workspaceRoot}"
+                "cwd": "${workspaceRoot}/CahnHilliard"
             }
         }
     ]

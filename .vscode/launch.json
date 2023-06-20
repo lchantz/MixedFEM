@@ -5,7 +5,7 @@
             "name": "Run GDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceRoot}/MixedFEM",
+            "program": "${workspaceRoot}/CahnHilliard/CahnHilliard",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}",
