@@ -1,6 +1,6 @@
 all: compile run
 
-fortran_files := $(shell ls | grep "\.f90")
+fortran_files := CHSystemSolver.f90 CahnHilliard.f90
 compile: 
 	gfortran $(fortran_files) \
 	-o CahnHilliard \

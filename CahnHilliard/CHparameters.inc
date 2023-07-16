@@ -10,8 +10,8 @@
     REAL(real64), PARAMETER:: epsilon = 0.01_real64
 
     !> Number of elements on x-axis and on y-axis
-    INTEGER, PARAMETER:: NELx=3
-    INTEGER, PARAMETER:: NELy=3
+    INTEGER, PARAMETER:: NELx=50
+    INTEGER, PARAMETER:: NELy=50
     INTEGER, PARAMETER:: NELmax=NELx*NELy
 
     !> Number of nodes on x and on y direction
@@ -21,12 +21,14 @@
 
 
     !> Number of time points
-    INTEGER, PARAMETER:: Tmax=10
+    INTEGER, PARAMETER:: Tmax=100
 
     !> Number of Nodes on Reference Element
     INTEGER, PARAMETER:: NNref = 9
 
     !> Time step
     REAL(real64) :: deltat
+
+ 
 
     COMMON/Timeinfo/deltat
