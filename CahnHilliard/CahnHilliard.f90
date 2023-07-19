@@ -29,12 +29,21 @@ program CahnHilliard
    !> STIFF - Stiffness
    !> MASS - Mass
    !> P - Non linear advective term from double well potential c^3-c
+   !> SF - Surface flux integral term only with contact angle condition
    REAL(real64) STIFF(NNmax,NNmax)
    REAL(real64) MASS(NNmax,NNmax)
    REAL(real64) P(NNmax,Tmax)
+   REAL(real64) SF(NNmax,Tmax)
+
 
    !> Derivative of the non-linear term
    REAL(real64) DP(NNmax,NNmax,Tmax)
+
+   !> Derivative of the Surface flux integral term
+   REAL(real64) DSF(NNmax,NNmax,Tmax)
+
+   !> Boundary Condition Index
+   CHARACTER(len=1) BC
 
    INTEGER i,timepoint
 
@@ -44,7 +53,14 @@ program CahnHilliard
    CALL SpaceDiscretization(x,y)
    CALL GlobalNodeNumbering(nop)
    CALL TimeDiscretization(t)
-   CALL WeakFormulation(x,y,STIFF,MASS,P,nop)
+
+   !> Specify the boundary condition index
+   !> BC = "P" for the periodic problem, BC = "A" for the contact angle condition
+
+   WRITE(*,*) "Specify the boundary condition index, BC = "
+   READ(*,*) BC
+
+   CALL WeakFormulation(BC,x,y,nop,timepoint,c,STIFF,MASS,P,SF,DSF)
 
    DP=0.
    DO timepoint=1,Tmax
@@ -115,8 +131,7 @@ END SUBROUTINE SpaceDiscretization
  !> -------------
  !> Params:
  !> -------------
- !> ngl:   global coordinates in space
- !> NEL:                 number of discrete elements
+ !> nop:   global coordinates in space
  !>******************************************************************************
 SUBROUTINE GlobalNodeNumbering(nop)
    use, intrinsic :: iso_fortran_env
@@ -198,21 +213,21 @@ SUBROUTINE InitialBoundaryConditions(x,y,nop, t, c, w)
    !> Auxiliary variable - w - the chemical potential
    REAL(real64) w(NNmax,Tmax)
 
-   LOGICAL:: isBoundaryPoint
+   LOGICAL:: isBoundaryNode
    LOGICAL:: isInitialTime
    INTEGER i,timepoint
 
    !Impose Periodic Boundary and initial conditions on c, w
    !can be redefined using the nop correspondence, so it appears on argument list
    DO i=1,NNmax
-      isBoundaryPoint = ((x(i) == 0.) .or. (x(i) == 1.) .or. (y(i) == 0. .or. y(i) == 1.))
+      isBoundaryNode = ((x(i) == 0.) .or. (x(i) == 1.) .or. (y(i) == 0. .or. y(i) == 1.))
       DO timepoint=1,Tmax
          isInitialTime = (t(timepoint) == 0.)
-         IF(isBoundaryPoint) THEN
+         IF(isBoundaryNode) THEN
             c(i,timepoint) = 0.
             w(i,timepoint) = 0.
          ELSEIF (isInitialTime) THEN
-            c(i,timepoint) = RAND()
+            c(i,timepoint) = RAND() !order parameter is set to a random value on initial time
             w(i,timepoint) = 0.
          ELSE
             c(i,timepoint) = 0.
@@ -233,10 +248,10 @@ END SUBROUTINE InitialBoundaryConditions
  !> -------------
  !> x,y:                   Space coordinates
  !> STIFF,MASS,P:          System matrices
- !> ngl:                   ngl --> node global numbering
+ !> nop:                   ngl --> node global numbering
  !>**************************************************************************************
 
-SUBROUTINE WeakFormulation(x,y,STIFF,MASS,P,nop)
+SUBROUTINE WeakFormulation(BC,x,y,nop,timepoint,c,STIFF,MASS,P,SF,DSF)
    use, intrinsic :: iso_fortran_env
    IMPLICIT NONE
    INCLUDE 'CHparameters.inc'
@@ -244,48 +259,103 @@ SUBROUTINE WeakFormulation(x,y,STIFF,MASS,P,nop)
    !> Space coordinates
    REAL(real64), INTENT(IN) :: x(NNmax),y(NNmax)
 
-   !> System matrices
-   !> STIFF - Stiffness
-   !> MASS - Mass
-   !> P - Non linear term from double well potential c^3-c
-   REAL(real64) STIFF(NNmax,NNmax)
-   REAL(real64) MASS(NNmax,NNmax)
-   REAL(real64) P(NNmax,Tmax)
+   
 
    !> Local to global space numbering / ngl --> node global numbering
    INTEGER nop(NELmax,NNref)
 
-   INTEGER i,element
-   LOGICAL:: isBoundaryPoint
+   !> timepoint
+   INTEGER timepoint
 
+   !> Order parameter - c - of the Cahn Hilliard Equation
+   REAL(real64) c(NNmax,Tmax)
+
+   !> System matrices
+   !> STIFF - Stiffness
+   !> MASS - Mass
+   !> P - Non linear term from double well potential c^3-c
+   !> SF - Surface flux integral term only with contact angle condition
+   REAL(real64) STIFF(NNmax,NNmax)
+   REAL(real64) MASS(NNmax,NNmax)
+   REAL(real64) P(NNmax,Tmax)
+   REAL(real64) SF(NNmax,Tmax)
+
+   !> Derivative of the Surface flux integral term
+   REAL(real64) DSF(NNmax,NNmax,Tmax)
+
+
+   !> Index vector to check for Boundary Nodes
+   INTEGER BoundaryNode(NNmax)
+
+   !> Index vector to check for Boundary Elements
+   INTEGER BoundaryElement(NELmax)
+
+   !> Boundary Condition Index
+   CHARACTER(len=1) BC
+
+   INTEGER i,element
+  
+
+   !> Initialization of system matrices and vectors to 0.
    STIFF=0.
    MASS=0.
    P=0.
+   SF=0.
 
+   
+
+   !> Calculation of Stiffness and Mass Matrices that are independent from the solution
    DO element=1,NELmax
-      CALL GaussianQuadrature(element,x,y,STIFF,MASS,nop)
+      CALL StiffnessMassMatrices(element,x,y,STIFF,MASS,nop)
    ENDDO
 
+   !> Initialization of index vectors
+   BoundaryNode=0
+   BoundaryElement=0
+   
+   IF (BC=="P") THEN
    !> Impose Periodic Boundary conditions on STIFF,MASS,P
-   !> A,P set to zero to be eliminated for generating equations on c,w accuratelly
+   !> STIFF,P set to zero to be eliminated for generating equations on c,w accuratelly
    !> Page 5 of Notes for explanation
-   DO i=1,NNmax
-      isBoundaryPoint = ((x(i) == 0.) .or. (x(i) == 1.) .or. (y(i) == 0. .or. y(i) == 1.))
-      IF (isBoundaryPoint) THEN
-         MASS(i,:) = 0.
-         MASS(i,i) = 1.
-         P(i,:) = 0.
-         STIFF(i,:) = 0.
+      DO i=1,NNmax
+         IF ((x(i) == 0.) .or. (x(i) == 1.) .or. (y(i) == 0. .or. y(i) == 1.))   THEN
+         BoundaryNode(i)=1
+         ELSE 
+         BoundaryNode(i)=0
+         ENDIF
+         IF (BoundaryNode(i)==1)   THEN   
+            MASS(i,:) = 0.
+            MASS(i,i) = 1.
+            P(i,:) = 0.
+            STIFF(i,:) = 0.
+         ENDIF
+      ENDDO 
+      
+   !> Taking into account the surface integral term appearing from 1st Green identity   
+   ELSEIF (BC=="A") THEN
+      DO i=1,(NELx-1)*NELy+1,NELy !bottom
+         BoundaryElement(i)=1
+      ENDDO   
+      DO i=(NELx-1)*NELy+1,NELmax,1 !right
+         BoundaryElement(i)=1
+      ENDDO   
+      DO i=NELmax,NELy,-NELy !top
+         BoundaryElement(i)=1
+      ENDDO   
+      DO i=NELy,1,-1 !left
+         BoundaryElement(i)=1
+      ENDDO 
+      DO element=1,NELmax
+      IF (BoundaryElement(element)==1)    THEN 
+      CALL SurfaceIntegral(x,y,element,nop,timepoint,c,SF,DSF)
       ENDIF
-   ENDDO      
-  
-
-
-
+      ENDDO
+   
+   ENDIF     
 END SUBROUTINE WeakFormulation
 
 !>******************************************************************************
-!> GaussianQuadrature numerical method for evaluation of integrals appearing in
+!> StiffnessMassMatrices numerical method for evaluation of integrals appearing in
 !> system matrices.
 !> -------------
 !> Params:
@@ -296,7 +366,7 @@ END SUBROUTINE WeakFormulation
 !> ngl:                 Local to global space numbering
 !>******************************************************************************
 
-SUBROUTINE GaussianQuadrature(element,x,y,STIFF,MASS,nop)
+SUBROUTINE StiffnessMassMatrices(element,x,y,STIFF,MASS,nop)
    use, intrinsic :: iso_fortran_env
    IMPLICIT NONE
    INCLUDE 'CHparameters.inc'
@@ -382,7 +452,104 @@ SUBROUTINE GaussianQuadrature(element,x,y,STIFF,MASS,nop)
    ENDDO !End of loop over gauss points
    ENDDO !End of loop over gauss points
 
-END SUBROUTINE GaussianQuadrature
+END SUBROUTINE StiffnessMassMatrices
+
+SUBROUTINE SurfaceIntegral(x,y,element,nop,timepoint,c,SF,DSF)
+   use, intrinsic :: iso_fortran_env
+   IMPLICIT NONE
+   INCLUDE 'CHparameters.inc' 
+
+
+   !> Space coordinates !xpt,ypt
+   REAL(real64), INTENT(IN) :: x(NNmax),y(NNmax)
+
+   !> Current element
+   INTEGER element
+
+   !> Local to global space numbering
+   INTEGER nop(NELmax,NNref)
+   INTEGER ngl(NNref)
+
+   !> timepoint
+   INTEGER timepoint
+
+   !> Order parameter - c - of the Cahn Hilliard Equation
+   REAL(real64) c(NNmax,Tmax)
+
+   !> SF - Surface flux integral term only with contact angle condition
+   REAL(real64) SF(NNmax,Tmax)
+
+   !> Derivative of the Surface flux integral term
+   REAL(real64) DSF(NNmax,NNmax,Tmax)
+
+
+   REAL(real64) phi(NNref), tphx(NNref), tphy(NNref),phic(NNref),phie(NNref)
+   REAL(real64) gp(3), gw(3)
+   REAL(real64) Xcomputational,Xc,Xe,Ycomputational,Yc,Ye,dett
+
+   REAL(real64) ci,cx,cy
+   INTEGER i,j,k,l,m,n
+   
+
+
+   gw  =(/0.27777777777778, 0.444444444444, 0.27777777777778/)
+   gp =(/0.1127016654    , 0.5           , 0.8872983346    /)
+
+   DO i = 1,NNref
+      ngl(i) = nop(element,i)
+   ENDDO
+
+   phi=0.
+   phic=0.
+   phie=0.
+   tphx=0.
+   tphy=0.
+   ! Loop over qauss points
+   DO j = 1,3
+      DO k = 1,3
+
+      call TestFunctions(gp(j),gp(k),phi,phic,phie)
+
+      ! Defines the computational domain coordinates and the 2-dimensional Jacobian dett
+      Xcomputational=0.
+      Xc=0.
+      Xe=0.
+      Ycomputational=0.
+      Yc=0.
+      Ye=0.
+      DO n=1,NNref
+         Xcomputational= Xcomputational + x(ngl(n)) * phi(n)
+         Xc= Xc + x(ngl(n)) * phic(n)
+         Xe= Xe + x(ngl(n)) * phie(n)
+         Ycomputational= Ycomputational + y(ngl(n)) * phi(n)
+         Yc= Yc + y(ngl(n)) * phic(n)
+         Ye= Ye + y(ngl(n)) * phie(n)
+      ENDDO
+      dett=Xc*Ye-Xe*Yc
+
+      DO i=1,NNref
+         tphx(i)=(Ye*phic(i)-Yc*phie(i))/dett
+         tphy(i)=(Xc*phie(i)-Xe*phic(i))/dett
+      ENDDO
+
+
+      ci = 0.
+      cx = 0.
+      cy = 0.
+      DO i=1,NNref
+         ci = ci + c(ngl(i),timePoint)*phi(i)
+         cx = cx + c(ngl(i),timePoint)*tphx(i)
+         cy = cy + c(ngl(i),timePoint)*tphy(i)
+      ENDDO
+
+   ENDDO
+ENDDO
+
+
+
+
+
+END SUBROUTINE SurfaceIntegral   
 
 
 
