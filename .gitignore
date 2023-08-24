@@ -1,4 +1,4 @@
-/lapack*
+*/lapack*
 *.mod
 *.dat
 *.out
