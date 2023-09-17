@@ -7,29 +7,29 @@
     !> Mixing Energy Density
     REAL(real64), PARAMETER:: lamda = 1.0_real64
     !> Capillary width
-    REAL(real64), PARAMETER:: epsilon = 1.0E-3_real64
+    REAL(real64), PARAMETER:: epsilon = 1.0E-1_real64
 
     !> Number of elements on x-axis and on y-axis
-    INTEGER, PARAMETER:: NELx=5
-    INTEGER, PARAMETER:: NELy=5
+    INTEGER, PARAMETER:: NELx=3
+    INTEGER, PARAMETER:: NELy=3
     INTEGER, PARAMETER:: NELmax=NELx*NELy
 
     !> Number of nodes on x and on y direction
     INTEGER, PARAMETER:: NNx=2*NELx + 1
     INTEGER, PARAMETER:: NNy=2*NELy + 1
     INTEGER, PARAMETER:: NNmax=NNx*NNy
-    INTEGER, PARAMETER:: Nhp=(NNx-1)*NNy !nodes in the horizontal periodicity case
+    INTEGER, PARAMETER:: NNp= NNmax - NNx - NNy +1 ! # of nodes in the periodic case
 
 
     !> Number of time points
-    INTEGER, PARAMETER:: Tmax=10
+    INTEGER, PARAMETER:: Tmax=120
 
     !> Number of Nodes on Reference Element
     INTEGER, PARAMETER:: NNref = 9
 
     !> Time step
-    REAL(real64),PARAMETER :: deltat=1.0E-8_real64
+    REAL(real64),PARAMETER :: dt=1.0E-9_real64
 
  
 
-    !>COMMON/Timeinfo/deltat
+    !>COMMON/Timeinfo/dt
