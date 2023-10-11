@@ -1,9 +1,9 @@
 all: compile run
 
-fortran_files := SystemSolver.f90 CahnHilliard.f90
+fortran_files := SystemSolver.f90 ${PROGRAM}
 compile: 
 	gfortran $(fortran_files) \
-	-o CahnHilliard \
+	-o ${OUT} \
 	-g -Wall -Wextra -Warray-temporaries -Wconversion -fimplicit-none \
 	-fbacktrace -ffree-line-length-0 -fcheck=all -ffpe-trap=zero,overflow,underflow \
 	-finit-real=nan \
@@ -13,4 +13,4 @@ compile:
 	./lapack-3.11/librefblas.a \
 
 run: 
-	./CahnHilliard
+	./${OUT}

@@ -5,7 +5,7 @@
             "name": "Run GDB",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceRoot}/CahnHilliard/CahnHilliard",
+            "program": "${workspaceRoot}/CahnHilliard/neumann",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}",
