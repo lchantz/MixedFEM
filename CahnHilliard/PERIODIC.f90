@@ -1,11 +1,11 @@
 !>******************************************************************************
-!>    The form of the Cahn Hilliard equation is...
+!>    CAHN-HILLIARD WITH PERIODIC BOUNDARY CONDITION
 !>******************************************************************************
 program PERIODIC
     use, intrinsic :: iso_fortran_env
     USE BiCGStab_mod
     IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
+    INCLUDE 'PARAMETERS_PERIODIC.inc'
  
     !> Space coordinates
     REAL(real64) x(NNmax),y(NNmax)
@@ -16,374 +16,210 @@ program PERIODIC
     !> Local to global node numbering
     INTEGER nop(NELmax,NNref)
  
-    !> Location indices to check for Boundary nodes
-    INTEGER BottomNode(NNmax)
-    INTEGER RightNode(NNmax)
-    INTEGER TopNode(NNmax)
-    INTEGER LeftNode(NNmax)
- 
-    !> Boundary element control index
-    INTEGER BoundaryNode(NNmax)
- 
-    !> Location indices to check for Boundary Elements
-    INTEGER BottomElement(NELmax)
-    INTEGER RightElement(NELmax)
-    INTEGER TopElement(NELmax)
-    INTEGER LeftElement(NELmax)
- 
-    !> Boundary element control index
-    INTEGER BoundaryElement(NELmax)
- 
-    !> Order parameter - c - of the Cahn Hilliard Equation
-    REAL(real64) c(NNmax,Tmax)
-    REAL(real64) cper(NNp,Tmax)
- 
- 
-    !> Auxiliary variable - w - the chemical potential
-    REAL(real64) w(NNmax,Tmax)
-    REAL(real64) wper(NNp,Tmax)
- 
-    !> ***********************************************************
-    !> The discrete approximation matrices of the weak formulation
-    !> ************************************************************
- 
-    !> STIFF - Stiffness
-    REAL(real64) STIFF(NNmax,NNmax)
-    REAL(real64) STIFFper(NNp,NNp)
- 
-    !> MASS - Mass
-    REAL(real64) MASS(NNmax,NNmax)
-    REAL(real64) MASSper(NNp,NNp)
- 
-    !> f - Non linear term from inner product of the double well potential c^3-c
-    REAL(real64) f(NNmax,Tmax)
-    REAL(real64) fper(NNp,Tmax)
- 
-    !> Jacobian of the non-linear term from double well potential
-    REAL(real64) J(NNmax,NNmax,Tmax)
-    REAL(real64) Jper(NNp,NNp,Tmax)
+    !> Order parameter - u - of the Cahn Hilliard Equation
+    REAL(real64) u_new(NNmax)
+    REAL(real64) u_old(NNmax)
 
  
- 
+    !> Auxiliary variable - w - the chemical potential
+    REAL(real64) w_new(NNmax)
+    REAL(real64) w_old(NNmax)
+   
  
     !> Newton tolerance parameters
-    REAL(real64),PARAMETER:: tolS=1.0E-6_real64 !, tolf=1.0E-4_real64
+    REAL(real64),PARAMETER:: tolS=1.0E-5_real64
     INTEGER, PARAMETER :: ntrial = 100
+    INTEGER, PARAMETER :: max_iter = 1000
  
-    !> Stationary system
+    !> Stationary system of Newton cycle
     REAL(real64) fvec(2*NNmax)
     REAL(real64) fjac(2*NNmax,2*NNmax)
-    REAL(real64) fvecper(2*NNp)
-    REAL(real64) fjacper(2*NNp,2*NNp)
+    !> Local contributions
+    REAL(real64) fjac1(NNmax,NNmax)
+    REAL(real64) fjac2(NNmax,NNmax)
+    REAL(real64) fjac3(NNmax,NNmax)
+    REAL(real64) fjac4(NNmax,NNmax)
+    
+    REAL(real64) fvec1(NNmax)
+    REAL(real64) fvec2(NNmax)
  
     !> Newton solution vector
     REAL(real64) dSol(2*NNmax)
     REAL(real64) Sol(2*NNmax)
-    REAL(real64) dSolper(2*NNp)
-    REAL(real64) Solper(2*NNp)
- 
- 
-    INTEGER element,i,timepoint,trial,m,n
+
+    INTEGER element,timepoint,trial,n,m,l
     LOGICAL CONVERGENT
+    CHARACTER(10) :: timepoint_str
  
-    OPEN(unit=1,file='0_PER.dat')
+    OPEN(unit=1,file='initial_PERIODIC.dat')
 
-    OPEN(unit=2,file='20_PER.dat')
-    OPEN(unit=3,file='30_PER.dat')
-    OPEN(unit=4,file='40_PER.dat')
-    OPEN(unit=5,file='50_PER.dat')
-    OPEN(unit=8,file='80_PER.dat')
-    OPEN(unit=9,file='90_PER.dat')
- 
-   
-   !  OPEN(unit=20,file='200_PER.dat')
-   !  OPEN(unit=30,file='300_PER.dat')
-   !  OPEN(unit=40,file='400_PER.dat')
-   !  OPEN(unit=50,file='500_PER.dat')
-   !  OPEN(unit=80,file='800_PER.dat')
-   !  OPEN(unit=90,file='900_PER.dat')
-
-   !  OPEN(unit=200,file='2000_PER.dat')
-   !  OPEN(unit=300,file='3000_PER.dat')
-   !  OPEN(unit=400,file='4000_PER.dat')
-   !  OPEN(unit=500,file='5000_PER.dat')
- 
-  
+    
  
     WRITE(*,'(25x,A)') 'Results c(n,t)'
     CALL SpaceDiscretization(x,y)
     CALL GlobalNodeNumbering(nop)
  
-    !> Initialization of indices
-    BottomNode=0
-    RightNode=0
-    TopNode=0
-    LeftNode=0
-    BoundaryNode=0
-    !> Mark boundary nodes
-    CALL BoundaryNodes(x,y,BottomNode,RightNode,TopNode,LeftNode,BoundaryNode)
- 
-    !> Initialization of indices
-    BottomElement=0
-    RightElement=0
-    TopElement=0
-    LeftElement=0
-    BottomElement=0
-    !> Mark boundary elements
-    CALL BoundaryElements(BottomElement,RightElement,TopElement,LeftElement,BoundaryElement)
  
     !> Set time grid
     t=0.0_real64
     CALL TimeDiscretization(t)
  
-    !>****************************************************************************
-    !> Calculation of Stiffness,Mass,FLUX for the full dimension (PER problem)
-    !>****************************************************************************
- 
-    !> Initialization of system matrices and vectors
-    STIFF=0.0_real64
-    MASS=0.0_real64
-    DO element=1,NELmax
-       CALL StiffnessMassMatrices(element,x,y,nop,STIFF,MASS)
-
-    ENDDO
- 
-    !>********************************************************
-    !> Calculation of the reduced matrices due to periodicity
-    !>********************************************************
-    STIFFper=0.0_real64
-    MASSper=0.0_real64
-    CALL PeriodicBoundaryConditions(BottomNode,LeftNode,BoundaryNode,STIFF,STIFFper,MASS,MASSper)
- 
- 
-    
-    !> ****************************************************************
-    !>  PERIODIC PROBLEM
-    !> ****************************************************************
-    
-    !  !>******************************************************************************
-    !    !> Given an initial guess x for a root in n dimensions, take ntrial Newton-Raphson
-    !  !> steps to improve the root. Stop if the root converges in either summed absolute
-    !    !> variable increments tolx or summed absolute function values tolf.
-    !  !>******************************************************************************
-    
     !>****************************************************************
     !> Set the initial conditions for the c,w variables of the problem
     !> For timepoint = 1
     !>*****************************************************************
-    !> timepoint=1
-    c=0.0_real64
-    w=0.0_real64
-    cper=0.0_real64
-    wper=0.0_real64
-    CALL InitialConditions(x,y,c,w)
-  
+    u_old=0.0_real64
+    u_new=0.0_real64
+    w_old=0.0_real64
+    w_new=0.0_real64
+    CALL InitialConditions(x,y,u_old,u_new,w_old,w_new)
 
-    !> reduced dimension
-    DO m=1,NNy ! left side
-       cper(m,1) = c(m,1)
-       wper(m,1) = w(m,1)
-   ENDDO
-   DO n=2,NNx-1 ! bottom 
-      cper((n-1)*NNy+1,1) = c((n-1)*NNy+1,1)
-      wper((n-1)*NNy+1,1) = w((n-1)*NNy+1,1)
-  ENDDO
- !> inner nodes match
-  DO n = 2,NNx-1
-   DO m = 2,NNy-1
-      cper((n-1)*(NNy)+m ,1) = c((n-1)*(NNy-1)+m ,1)
-      wper((n-1)*(NNy-1)+m ,1) = w((n-1)*(NNy-1)+m ,1)
-   ENDDO
-  ENDDO
-
-
-   DO m=1,NNy
-      DO n=1,NNx
-       WRITE(1,*) m,n,c((n-1)*NNy+m,1)
-      ENDDO  
+    DO n=1,NNx
+       WRITE(1,*) (u_old((n-1)*NNy+m),m=1,NNy)
     ENDDO
     CLOSE(1)
+
+    
+     !>***********************************************************************************
+     !> Given an initial guess x for a root in n dimensions, take ntrial Newton-Raphson
+     !> steps to improve the root. Stop if the root converges in either summed absolute
+     !> variable increments tolx or summed absolute function values tolf.
+     !>***********************************************************************************
+
  
-    !> Time loop to attain the solution at every timepoint
+   !> Time loop to attain the solution at every timepoint
     DO timepoint=2,Tmax
-       print *, "Time point: ", timepoint
- 
-       trial=0
-       CONVERGENT=.false.
-       Solper=0.0_real64
- 
-       !> Choose the initial guess for the first newton iteration
-       Solper(1:NNp) = wper(:,timepoint-1)
-       Solper(NNp+1:2*NNp) = cper(:,timepoint-1)
- 
- 
-       !> Start the Newton iteration loop
-       !> NewtonTrials: DO trial=1,ntrial
-       DO WHILE (.NOT.CONVERGENT .AND. trial < ntrial)
-          dSolper=0.0_real64
- 
- !             !>*****************************************************************
- !             !> Calculate the double well potential and the derivative
- !             !> Depend on c, the order parameter
- !             !>*****************************************************************
-          fper=0.0_real64
-          Jper=0.0_real64
-          f=0.0_real64
-          J=0.0_real64
-             DO element=1,NELmax
-                CALL PotentialTerm(x,y,element,nop,timepoint,c,f,J)
-             ENDDO
-             !> Impose periodicity
-             DO i=1,NNp
-                IF (LeftNode(i)==1) THEN
-                fper(i,timepoint) = f(i,timepoint) + f(NNmax-NNy+i,timepoint)
-                ELSEIF (BoundaryNode(i)==0) THEN
-                   fper(i,timepoint) = f(i,timepoint)
-                ENDIF
-             ENDDO
-  
-   !> Innner nodes block
-    DO m=1,NNp
-       DO n=1,NNp
-          IF (BoundaryNode(m)==0 .AND. BoundaryNode(n)==0) THEN
-         Jper(m,n,timepoint) = J(m,n,timepoint)
-          ENDIF
-       ENDDO
-    ENDDO
- 
- 
-    DO m=1,NNp
-      IF (LeftNode(m)==1) THEN
-         Jper(m,m,timepoint) = J(m,m,timepoint) + J(NNmax-NNy+m,m,timepoint) + J(m,NNmax-NNy+m,timepoint) + J(NNmax-NNy+m,NNmax-NNy+m,timepoint)
-      ENDIF   
-       DO n=1,NNp
+      print *, "Time point: ", timepoint
+
+      trial=0
+      CONVERGENT=.false.
+      Sol=0.0_real64
+
+
+      
+      !> Choose the initial guess for the first newton iteration
+      Sol(1:NNmax) = w_old(:) 
+      Sol(NNmax+1:2*NNmax) = u_old(:) 
+      
+      !> Start the Newton iteration loop
+      DO WHILE (.NOT.CONVERGENT .AND. trial < ntrial)
+         dSol=0.0_real64
+
+         !>******************************************************************
+         !> Set the Stationary System to be solved at every Newton iteration
+         !> ___________________Fjac.dx = -Fvec_______________________________
+         !>******************************************************************
+          fvec=0.0_real64
+          fjac=0.0_real64
+
+          fjac1=0.0_real64
+          fjac2=0.0_real64
+          fjac3=0.0_real64
+          fjac4=0.0_real64
+
+          fvec1=0.0_real64
+          fvec2=0.0_real64
+
+          !> Local contributions
+          DO element=1,NELmax
+          CALL AssembleSystem(x,y,element,nop,u_old,u_new,w_new,fjac1,fjac2,fjac3,fjac4,fvec1,fvec2)
+          ENDDO
+          !> Global system 
+          fvec(1:NNmax) = fvec1(:)
+          fvec(NNmax+1:2*NNmax) = fvec2(:)
+
+         fjac(1:NNmax,1:NNmax) = fjac1(:,:)
+         fjac(1:NNmax,NNmax+1:2*NNmax) = fjac2(:,:)
+         fjac(NNmax+1:2*NNmax,1:NNmax) = fjac3(:,:)
+         fjac(NNmax+1:2*NNmax,NNmax+1:2*NNmax) = fjac4(:,:)
+
+         !> Imposing the periodic conditions
+         DO l=1,NNy 
+            fvec(l) = fvec(l) + fvec(NNmax-NNy+l)
+            fvec(NNmax-NNy+l) = 0.0_real64 
+
+            fjac(l,:) = fjac(l,:) + fjac(NNmax-NNy+l,:)
+            fjac(:,l) = fjac(:,l) + fjac(:,NNmax-NNy+l)
+            fjac(NNmax-NNy+l,:) = 0.0_real64
+            fjac(:,NNmax-NNy+l) = 0.0_real64
+            fjac(NNmax-NNy+l,NNmax-NNy+l) = 1.0_real64
+         ENDDO        
+         DO l=2,NNx-1 
+            fvec((l-1)*NNy+1) = fvec((l-1)*NNy+1) + fvec(l*NNy)
+            fvec(l*NNy) = 0.0_real64 
+
+            fjac((l-1)*NNy+1,:) = fjac((l-1)*NNy+1,:) + fjac(l*NNy,:)
+            fjac(:,(l-1)*NNy+1) = fjac(:,(l-1)*NNy+1) + fjac(:,l*NNy)
+            fjac(l*NNy,:) = 0.0_real64
+            fjac(:,l*NNy) = 0.0_real64
+            fjac(l*NNy,l*NNy) = 1.0_real64
+         ENDDO        
+
+         !> Solve the system - find the correction dSol
+         fvec = -fvec
+         dSol = BiCGStab(fjac,fvec)
          
-          IF (LeftNode(m)==1 .AND. BoundaryNode(n)==0) THEN
-             Jper(m,n,timepoint) = J(m,n,timepoint) + J(NNmax-NNy+m,n,timepoint)
-          ELSEIF (LeftNode(n)==1 .AND. BoundaryNode(m)==0) THEN
-             Jper(m,n,timepoint) = J(m,n,timepoint) + J(m,NNmax-NNy+n,timepoint)
+         !> Recover the right boundary nodes
+         DO l=1,NNy 
+            dSol(NNmax-NNy+l) = dSol(l)
+            dsol(2*NNmax-NNy+l) = dSol(NNmax+l)
+         ENDDO 
+         !> Recover the top nodes  
+         DO l=2,NNx-1 
+            dSol(l*NNy) = dSol((l-1)*NNy+1)
+            dsol(NNmax+l*NNy) = dSol(NNmax+(l-1)*NNy+1)
+         ENDDO 
+
+         !> Update the solution
+         Sol(:) = Sol(:) + dSol(:)
+
+         DO l=1,2*NNmax
+            IF (Sol(l) <= - 0.9999) THEN 
+               Sol(l) = - 0.9999 
+            ELSEIF (Sol(l) >= 0.9999) THEN 
+               Sol(l) = 0.9999
+            ENDIF   
+         ENDDO   
+     
+         !> Check for convergence
+         CONVERGENT = (NORM2(dSol) < tolS)
+         print*,"CONVERGENCE", CONVERGENT
+
+         trial = trial + 1
+         w_new(:) = Sol(1:NNmax)
+         u_new(:) = Sol(NNmax+1:2*NNmax)
+
+      ENDDO  !> Newton trial loop
+      
+      IF (CONVERGENT) THEN
+
+               u_old(:) = u_new(:)
+               w_old(:) = w_new(:)
+
+         write(*,*) 'Newton-Raphson converged in', trial, 'iterations'
+
+
+         IF ((timepoint<=100 .and. MOD(timepoint,10)==0).or.MOD(timepoint, 500) == 0) THEN
+            
+            WRITE(timepoint_str, '(I0)') timepoint  ! Convert the integer to a string
+          
+            OPEN(UNIT=2, FILE=TRIM(ADJUSTL(timepoint_str)) // '_PERIODIC.dat')
+            DO n = 1, NNx
+              WRITE(2, *) (u_new((n - 1) * NNy + m), m = 1, NNy)
+            ENDDO
+          
+            CLOSE(2)
           ENDIF
- 
-       ENDDO
-    ENDDO
- 
- 
- 
-             !>******************************************************************
-             !> Set the Stationary System to be solved at every Newton iteration
-             !> ___________________Fjac.dx = -Fvec_______________________________
-             !>******************************************************************
-             fvecper=0.0_real64
-             fjacper=0.0_real64
-             CALL StationarySystemPER(timePoint,cper,wper,STIFFper,MASSper,fper,Jper,fjacper,fvecper)
- 
-             !> Solve the system - find the correction dSolper
-                fvecper = -fvecper
-                dSolper = BiCGStab(fjacper,fvecper)
- 
-                !> Update the solution
-                 Solper(:) = Solper(:) + dSolper(:)
- 
- 
-               !> Check for convergence
-               CONVERGENT = (NORM2(dSolper) < tolS)
-               print*,"trial", trial
-               print*,"CONVERGENCE", CONVERGENT
- 
-               trial = trial + 1
-               wper(:,timepoint) = Solper(1:NNp)
-               cper(:,timepoint) = Solper(NNp+1:2*NNp)
- 
-              !> extend back to full dimension
-               DO m=1,NNy ! left to right
-                   c(m,timepoint) = cper(m,timepoint)
-                   c(NNmax-NNy+m,timepoint) = cper(m,timepoint)
-                   w(m,timepoint) = wper(m,timepoint)
-                   w(NNmax-NNy+m,timepoint) = wper(m,timepoint)
-               ENDDO
-               DO n=2,NNx-1 ! bottom to top
-                   c((n-1)*NNy+1,timepoint) = cper((n-1)*NNy+1,timepoint)
-                   c(n*NNy,timepoint) = cper((n-1)*NNy+1,timepoint)
-                   w((n-1)*NNy+1,timepoint) = wper((n-1)*NNy+1,timepoint)
-                   w(n*NNy,timepoint) = wper((n-1)*NNy+1,timepoint)
-               ENDDO
- 
-             !> inner nodes match
-               DO n = 2,NNx-1
-                DO m = 2,NNy-1
-                   c((n-1)*(NNy)+m,timepoint) = cper((n-1)*(NNy)+m ,timepoint)
-                   w((n-1)*(NNy)+m,timepoint) = wper((n-1)*(NNy)+m ,timepoint)
-                ENDDO
-               ENDDO
 
-               ! !> 4 corners
-               ! c(1,timepoint) = cper(1,timepoint)
-               ! c(NNmax-NNy+1,timepoint) = cper(1,timepoint)
-               ! c(NNy,timepoint) = cper(1,timepoint)
-               ! c(NNmax,timepoint) = cper(1,timepoint)
+      
 
-               ! w(1,timepoint) = wper(1,timepoint)
-               ! w(NNmax-NNy+1,timepoint) = wper(1,timepoint)
-               ! w(NNy,timepoint) = wper(1,timepoint)
-               ! w(NNmax,timepoint) = wper(1,timepoint)
-
- 
-             ENDDO  !trials
- 
-          IF (CONVERGENT) THEN
-             write(*,*) 'Newton-Raphson converged in', trial, 'iterations'
-          ELSE
-             write(*,*) 'Newton-Raphson did not converge within', ntrial, 'iterations'
-          ENDIF
- 
-    ENDDO !> Time loop
-     !> Write the results
+      ELSE
+         write(*,*) 'Newton-Raphson did not converge within', ntrial, 'iterations'
+      ENDIF
 
 
-    DO n=1,NNy
-      DO m=1,NNx
-      WRITE(2,*) n,m,c((n-1)*NNy+m,20)
-      WRITE(3,*) n,m,c((n-1)*NNy+m,30)
-      WRITE(4,*) n,m,c((n-1)*NNy+m,40)
-      WRITE(5,*) n,m,c((n-1)*NNy+m,50)
-      WRITE(8,*) n,m,c((n-1)*NNy+m,80)
-      WRITE(9,*) n,m,c((n-1)*NNy+m,90)
+   ENDDO !> Time loop
 
-      ! WRITE(20,*) m,n,c((n-1)*NNy+m,200)
-      ! WRITE(30,*) m,n,c((n-1)*NNy+m,300)
-      ! WRITE(40,*) m,n,c((n-1)*NNy+m,400)
-      ! WRITE(50,*) m,n,c((n-1)*NNy+m,500)
-      ! WRITE(80,*) m,n,c((n-1)*NNy+m,800)
-      ! WRITE(90,*) m,n,c((n-1)*NNy+m,900)
-
-      ! WRITE(200,*) m,n,c((n-1)*NNy+m,1999)
-      ! WRITE(300,*) m,n,c((n-1)*NNy+m,3000)
-      ! WRITE(400,*) m,n,c((n-1)*NNy+m,4000)
-      ! WRITE(500,*) m,n,c((n-1)*NNy+m,5000)
-  
-   ENDDO  
-ENDDO
- 
-    CLOSE(2)
-    CLOSE(3)
-    CLOSE(4)
-    CLOSE(5)
-    CLOSE(8)
-    CLOSE(9)
-
-   !  CLOSE(20)
-   !  CLOSE(30)
-   !  CLOSE(40)
-   !  CLOSE(50)
-   !  CLOSE(80)
-   !  CLOSE(90)
-
-   !  CLOSE(200)
-   !  CLOSE(300)
-   !  CLOSE(400)
-   !  CLOSE(500)
-  
- 
  END program PERIODIC
  
  
@@ -399,7 +235,7 @@ ENDDO
  SUBROUTINE SpaceDiscretization(x,y)
     use, intrinsic :: iso_fortran_env
     IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
+    INCLUDE 'PARAMETERS_PERIODIC.inc'
  
     !> Space coordinates
     REAL(real64) x(NNmax),y(NNmax)
@@ -448,7 +284,7 @@ ENDDO
  SUBROUTINE GlobalNodeNumbering(nop)
     use, intrinsic :: iso_fortran_env
     IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
+    INCLUDE 'PARAMETERS_PERIODIC.inc'
  
     !> Local to global space numbering
     INTEGER nop(NELmax,NNref)
@@ -471,7 +307,7 @@ ENDDO
  SUBROUTINE BoundaryNodes(x,y,BottomNode,RightNode,TopNode,LeftNode,BoundaryNode)
     use, intrinsic :: iso_fortran_env
     IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
+    INCLUDE 'PARAMETERS_PERIODIC.inc'
  
     !> Space coordinates
     REAL(real64) x(NNmax),y(NNmax)
@@ -527,7 +363,7 @@ ENDDO
  SUBROUTINE BoundaryElements(BottomElement,RightElement,TopElement,LeftElement,BoundaryElement)
     use, intrinsic :: iso_fortran_env
     IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
+    INCLUDE 'PARAMETERS_PERIODIC.inc'
  
     !> Location indices to check for Boundary Elements
     INTEGER BottomElement(NELmax)
@@ -580,7 +416,7 @@ ENDDO
  SUBROUTINE TimeDiscretization(t)
     use, intrinsic :: iso_fortran_env
     IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
+    INCLUDE 'PARAMETERS_PERIODIC.inc'
  
     !> Time coordinates
     REAL(real64) t(Tmax)
@@ -609,666 +445,37 @@ ENDDO
   !> t:                   Time coordinates
   !>
   !>******************************************************************************
- SUBROUTINE InitialConditions(x,y,c,w)
-    use, intrinsic :: iso_fortran_env
-    IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
- 
-    !> Space coordinates
-    REAL(real64) x(NNmax),y(NNmax)
- 
- !> Order parameter - c - of the Cahn Hilliard Equation
-    REAL(real64) c(NNmax,Tmax)
-   !  REAL(real64) cper(NNp,Tmax)
- 
- 
-    !> Auxiliary variable - w - the chemical potential
-    REAL(real64) w(NNmax,Tmax)
-   !  REAL(real64) wper(NNp,Tmax)
- 
- 
-    INTEGER :: i
-   !  REAL(real64) :: u1, u2
- 
-    ! Standard deviation for the desired range [-1, 1]
-   !  REAL(real64) :: std_deviation = 0.05_real64
- 
-    ! Mean for the desired range [-1, 1]
-   !  REAL(real64) :: mean = 0.0_real64
- 
-    ! Seed the random number generator (you can choose your seed value)
-   !  CALL RANDOM_SEED()
- 
-    DO i = 1, NNmax
-      !  CALL RANDOM_NUMBER(u1)
-      !  CALL RANDOM_NUMBER(u2)
- 
-       ! Use Box-Muller transform to generate a normally distributed random number
-      !  cper(i, 1) = std_deviation * SQRT(-2.0_real64 * LOG(u1)) * COS(2.0_real64 * PI * u2) + mean
- 
-      !  ! Ensure c(i, 1) falls within [-1, 1]
-      !  cper(i, 1) = MIN(1.0_real64, MAX(-1.0_real64, cper(i, 1)))
-
-      !  cper(i,1) = 1.0_real64/(1.0_real64 + exp(-7.5_real64 + sqrt(x(i)**2+y(i)**2)))
-      CALL RANDOM_NUMBER(c(i,1))
-      ! c(i,1) = 0.63_real64 + 0.02_real64*(0.5_real64-c(i,1))
-      c(i,1) = 2.0_real64*c(i,1) - 1.0_real64
-      w(i,1) = 0.0_real64
-    ENDDO
-
- 
- END SUBROUTINE InitialConditions
-
- SUBROUTINE Initialfile(cper)
+ SUBROUTINE InitialConditions(x, y, u_old,u_new,w_old,w_new)
    use, intrinsic :: iso_fortran_env
    IMPLICIT NONE
-   INCLUDE 'CHParameters.inc'
- 
-   REAL(real64) cper(NNp,Tmax)
-   REAL(real64) x
-   REAL(real64) y
-   INTEGER i
+   INCLUDE 'PARAMETERS_PERIODIC.inc'
 
-   OPEN(unit=5,file='InitialCondition_PER.dat',status = 'old')
-   DO i=1,NNp
-      read(5,*) x, y, cper(i,1)
-   ENDDO   
-   
-   CLOSE(5)
+   !> Space coordinates
+   REAL(real64) x(NNmax),y(NNmax)
 
- END SUBROUTINE   
- 
- 
- !>******************************************************************************
- !> StiffnessMassMatrices numerical method for evaluation of integrals appearing in
- !> system matrices.
- !> -------------
- !> Params:
- !> -------------
- !> element:             the current element
- !> x,y:                 spatial coordinates
- !> STIFF,MASS:          System matrices
- !> ngl:                 Local to global space numbering
- !>******************************************************************************
- 
- SUBROUTINE StiffnessMassMatrices(element,x,y,nop,STIFF,MASS)
-    use, intrinsic :: iso_fortran_env
-    IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
- 
- 
-    !> Current element
-    INTEGER element
- 
-    !> Space coordinates !xpt,ypt
-    REAL(real64), INTENT(IN) :: x(NNmax),y(NNmax)
- 
-    !> Local to global space numbering
-    INTEGER nop(NELmax,NNref)
-    INTEGER ngl(NNref)
- 
-    !> System matrices
-    !> STIFF - Stiffness
-    !> MASS - Mass
- 
-    REAL(real64) STIFF(NNmax,NNmax)
-    REAL(real64) MASS(NNmax,NNmax)
- 
- 
- 
- 
-    REAL(real64) phi(NNref), tphx(NNref), tphy(NNref),phic(NNref),phie(NNref)
-    REAL(real64) gp(3), gw(3)
-    REAL(real64) Xdomain,Xc,Xe,Ydomain,Yc,Ye,dett
- 
- 
-    INTEGER i,j,k,l,m,n
- 
- 
- 
-    gw  =(/0.27777777777778, 0.444444444444, 0.27777777777778/)
-    gp =(/0.1127016654    , 0.5           , 0.8872983346    /)
- 
-    DO i = 1,NNref
-       ngl(i) = nop(element,i)
-    ENDDO
- 
-    phi=0.0_real64
-    phic=0.0_real64
-    phie=0.0_real64
-    tphx=0.0_real64
-    tphy=0.0_real64
-    ! Loop over qauss points
-    DO j = 1,3
-       DO k = 1,3
- 
-          ! TODO: check test func | tphy,tphx,dett -> nan
-          call TestFunctions(gp(j),gp(k),phi,phic,phie)
- 
-          ! Defines the domain domain coordinates and the 2-dimensional Jacobian dett
-          Xdomain=0.0_real64
-          Xc=0.0_real64
-          Xe=0.0_real64
-          Ydomain=0.0_real64
-          Yc=0.0_real64
-          Ye=0.0_real64
-          DO n=1,NNref
-             Xdomain= Xdomain + x(ngl(n)) * phi(n)
-             Xc= Xc + x(ngl(n)) * phic(n)
-             Xe= Xe + x(ngl(n)) * phie(n)
-             Ydomain= Ydomain + y(ngl(n)) * phi(n)
-             Yc= Yc + y(ngl(n)) * phic(n)
-             Ye= Ye + y(ngl(n)) * phie(n)
-          ENDDO
-          dett=Xc*Ye-Xe*Yc
- 
-          DO i=1,NNref
-             tphx(i)=(Ye*phic(i)-Yc*phie(i))/dett
-             tphy(i)=(Xc*phie(i)-Xe*phic(i))/dett
-          ENDDO
- 
- 
- 
-          DO l=1,NNref
-             DO m=1,NNref
-                STIFF(ngl(l),ngl(m)) = STIFF(ngl(l),ngl(m)) + gw(j)*gw(k)*dett*(tphx(l)*tphx(m)+tphy(l)*tphy(m))
-                MASS(ngl(l),ngl(m)) = MASS(ngl(l),ngl(m)) + gw(j)*gw(k)*dett*(phi(l)*phi(m))
-             ENDDO
-          ENDDO
-       ENDDO !End of loop over gauss points
-    ENDDO !End of loop over gauss points
- 
- END SUBROUTINE StiffnessMassMatrices
- 
- SUBROUTINE BoundaryFluxMatrix(element,x,y,nop,BottomElement,RightElement,TopElement,LeftElement,BoundaryElement,&
-    FLUXBottom,FLUXRight,FLUXTop,FLUXLeft,FLUX)
-    use, intrinsic :: iso_fortran_env
-    IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
- 
- 
-    !> Current element
-    INTEGER element
- 
-    !> Space coordinates !xpt,ypt
-    REAL(real64), INTENT(IN) :: x(NNmax),y(NNmax)
- 
-    !> Local to global space numbering
-    INTEGER nop(NELmax,NNref)
-    INTEGER ngl(NNref)
- 
-    !> FLUX contributions
-    REAL(real64) FLUXBottom(NNmax,NNmax)
-    REAL(real64) FLUXRight(NNmax,NNmax)
-    REAL(real64) FLUXTop(NNmax,NNmax)
-    REAL(real64) FLUXLeft(NNmax,NNmax)
- 
-    !> Derivative of the Surface FLUX integral term
-    REAL(real64) FLUX(NNmax,NNmax)
- 
-    !> Location indices to check for Boundary Elements
-    INTEGER BottomElement(NELmax)
-    INTEGER RightElement(NELmax)
-    INTEGER TopElement(NELmax)
-    INTEGER LeftElement(NELmax)
- 
-    !> Boundary element control index
-    INTEGER BoundaryElement(NELmax)
- 
- 
-    REAL(real64) phi(NNref), tphx(NNref), tphy(NNref),phic(NNref),phie(NNref)
-    REAL(real64) gp(3), gw(3)
-    REAL(real64) Xdomain,Xc,Xe,Ydomain,Yc,Ye,dett
- 
- 
-    INTEGER i,j,k,l,m,n
- 
- 
- 
-    gw  =(/0.27777777777778, 0.444444444444, 0.27777777777778/)
-    gp =(/0.1127016654    , 0.5           , 0.8872983346    /)
- 
-    DO i = 1,NNref
-       ngl(i) = nop(element,i)
-    ENDDO
- 
- 
-    !> calculate the contribution of the surface integral term
- 
-    IF (BoundaryElement(element)==1) THEN
- 
-       !> check which side of the boundary the element belongs to
-       IF (BottomElement(element)==1)THEN
-          DO j=1,3
-             CALL TestFunctions(gp(j),0.0_real64,phi, phic, phie)
- 
-             Xdomain=0.0_real64
-             Xc=0.0_real64
-             Xe=0.0_real64
-             Ydomain=0.0_real64
-             Yc=0.0_real64
-             Ye=0.0_real64
-             DO n=1,NNref
-                Xdomain= Xdomain + x(ngl(n)) * phi(n)
-                Xc= Xc + x(ngl(n)) * phic(n)
-                Xe= Xe + x(ngl(n)) * phie(n)
-                Ydomain= Ydomain + y(ngl(n)) * phi(n)
-                Yc= Yc + y(ngl(n)) * phic(n)
-                Ye= Ye + y(ngl(n)) * phie(n)
-             ENDDO
-             dett=Xc*Ye-Xe*Yc
- 
-             DO i=1,NNref
-                tphx(i)=(Ye*phic(i)-Yc*phie(i))/dett
-                tphy(i)=(Xc*phie(i)-Xe*phic(i))/dett
-             ENDDO
- 
-             DO m=1,7,3
-                DO n=1,NNref
-                   FLUXBottom(ngl(m),ngl(n)) = FLUXBottom(ngl(m),ngl(n)) &
-                      - gw(j)*Xc*phi(m)*tphy(n)
-                ENDDO
-             ENDDO
-          ENDDO
- 
-       IF (RightElement(element)==1)THEN
-          DO j=1,3
-             CALL TestFunctions(1.0_real64,gp(j),phi, phic, phie)
- 
-             Xdomain=0.0_real64
-             Xc=0.0_real64
-             Xe=0.0_real64
-             Ydomain=0.0_real64
-             Yc=0.0_real64
-             Ye=0.0_real64
-             DO n=1,NNref
-                Xdomain= Xdomain + x(ngl(n)) * phi(n)
-                Xc= Xc + x(ngl(n)) * phic(n)
-                Xe= Xe + x(ngl(n)) * phie(n)
-                Ydomain= Ydomain + y(ngl(n)) * phi(n)
-                Yc= Yc + y(ngl(n)) * phic(n)
-                Ye= Ye + y(ngl(n)) * phie(n)
-             ENDDO
-             dett=Xc*Ye-Xe*Yc
- 
-             DO i=1,NNref
-                tphx(i)=(Ye*phic(i)-Yc*phie(i))/dett
-                tphy(i)=(Xc*phie(i)-Xe*phic(i))/dett
-             ENDDO
- 
- 
- 
-             DO m=7,9
-                DO n=1,NNref
-                   FLUXRight(ngl(m),ngl(n)) = FLUXRight(ngl(m),ngl(n)) &
-                      + gw(j)*Ye*phi(m)*tphx(n)
-                ENDDO
-             ENDDO
-          ENDDO
- 
-       ELSEIF (TopElement(element)==1)THEN
-          DO j=1,3
-             CALL TestFunctions(gp(j),1.0_real64,phi, phic, phie)
- 
-             Xdomain=0.0_real64
-             Xc=0.0_real64
-             Xe=0.0_real64
-             Ydomain=0.0_real64
-             Yc=0.0_real64
-             Ye=0.0_real64
-             DO n=1,NNref
-                Xdomain= Xdomain + x(ngl(n)) * phi(n)
-                Xc= Xc + x(ngl(n)) * phic(n)
-                Xe= Xe + x(ngl(n)) * phie(n)
-                Ydomain= Ydomain + y(ngl(n)) * phi(n)
-                Yc= Yc + y(ngl(n)) * phic(n)
-                Ye= Ye + y(ngl(n)) * phie(n)
-             ENDDO
-             dett=Xc*Ye-Xe*Yc
- 
-             DO i=1,NNref
-                tphx(i)=(Ye*phic(i)-Yc*phie(i))/dett
-                tphy(i)=(Xc*phie(i)-Xe*phic(i))/dett
-             ENDDO
- 
-             DO m=3,9,3
-                DO n=1,NNref
-                   FLUXTop(ngl(m),ngl(n)) = FLUXTop(ngl(m),ngl(n)) &
-                      + gw(j)*Xc*phi(m)*tphy(n)
-                ENDDO
- 
-             ENDDO
-          ENDDO
- 
-       ELSEIF (LeftElement(element)==1)THEN
-          DO j=1,3
-             CALL TestFunctions(0.0_real64,gp(j),phi, phic, phie)
- 
-             Xdomain=0.0_real64
-             Xc=0.0_real64
-             Xe=0.0_real64
-             Ydomain=0.0_real64
-             Yc=0.0_real64
-             Ye=0.0_real64
-             DO n=1,NNref
-                Xdomain= Xdomain + x(ngl(n)) * phi(n)
-                Xc= Xc + x(ngl(n)) * phic(n)
-                Xe= Xe + x(ngl(n)) * phie(n)
-                Ydomain= Ydomain + y(ngl(n)) * phi(n)
-                Yc= Yc + y(ngl(n)) * phic(n)
-                Ye= Ye + y(ngl(n)) * phie(n)
-             ENDDO
-             dett=Xc*Ye-Xe*Yc
- 
-             DO i=1,NNref
-                tphx(i)=(Ye*phic(i)-Yc*phie(i))/dett
-                tphy(i)=(Xc*phie(i)-Xe*phic(i))/dett
-             ENDDO
- 
- 
-             DO m=1,3
-                DO n=1,NNref
-                   FLUXLeft(ngl(m),ngl(n)) = FLUXLeft(ngl(m),ngl(n)) &
-                      - gw(j)*Ye*phi(m)*tphx(n)
-                ENDDO
-             ENDDO
-          ENDDO
- 
- 
-       ENDIF
-    ENDIF
- 
-    !> Summation of the components to the total FLUX
-    DO k=1,NNref
-       DO l=1,NNref
-          FLUX(ngl(k),ngl(l)) =  FLUXRight(ngl(k),ngl(l)) &
-             + FLUXTop(ngl(k),ngl(l)) + FLUXLeft(ngl(k),ngl(l)) + FLUXBottom(ngl(k),ngl(l))
-       ENDDO
- 
-    ENDDO
-   ENDIF
- END SUBROUTINE
- 
- SUBROUTINE PeriodicBoundaryConditions(BottomNode,LeftNode,BoundaryNode,STIFF,STIFFper,MASS,MASSper)
-    use, intrinsic :: iso_fortran_env
-    IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
- 
-    !> Location indices to check for Boundary nodes
-    INTEGER BottomNode(NNmax)
+   !> Order parameter - c - of the Cahn Hilliard Equation
+   REAL(real64), DIMENSION(NNmax) :: u_old
+   REAL(real64), DIMENSION(NNmax) :: u_new
 
-    INTEGER LeftNode(NNmax)
- 
-    !> Boundary element control index
-    INTEGER BoundaryNode(NNmax)
- 
- 
-    REAL(real64) STIFF(NNmax,NNmax)
-    REAL(real64) STIFFper(NNp,NNp)
- 
-    REAL(real64) MASS(NNmax,NNmax)
-    REAL(real64) MASSper(NNp,NNp)
- 
- 
- 
-    INTEGER i,j
- 
-    !> Innner nodes block
-    DO i=1,NNp
-       DO j=1,NNp
-          IF (BoundaryNode(i)==0 .AND. BoundaryNode(j)==0) THEN
-             MASSper(i,j) = MASS(i,j)
-             STIFFper(i,j) = STIFF(i,j)
-          ENDIF
-       ENDDO
-    ENDDO
- 
- 
-    DO i=1,NNp
-      IF (LeftNode(i)==1) THEN
-         MASSper(i,i) = MASS(i,i) + MASS(NNmax-NNy+i,i) + MASS(i,NNmax-NNy+i) + MASS(NNmax-NNy+i,NNmax-NNy+i)
-         STIFFper(i,i) = STIFF(i,i) + STIFF(NNmax-NNy+i,i) + STIFF(i,NNmax-NNy+i) + STIFF(NNmax-NNy+i,NNmax-NNy+i)
-      ENDIF   
-       DO j=1,NNp
- 
-          IF (LeftNode(i)==1 .AND. BoundaryNode(j)==0) THEN
-             MASSper(i,j) = MASS(i,j) + MASS(NNmax-NNy+i,j)
-             STIFFper(i,j) = STIFF(i,j) + STIFF(NNmax-NNy+i,j)
-             
- 
-          ELSEIF (LeftNode(j)==1 .AND. BoundaryNode(i)==0) THEN
-             MASSper(i,j) = MASS(i,j) + MASS(i,NNmax-NNy+j)
-             STIFFper(i,j) = STIFF(i,j) + STIFF(i,NNmax-NNy+j)
+   !> Auxiliary variable - w - the chemical potential
+   REAL(real64), DIMENSION(NNmax) :: w_old
+   REAL(real64), DIMENSION(NNmax) :: w_new
 
-          ENDIF
- 
-       ENDDO
-    ENDDO
- 
- 
- 
- 
- 
- END SUBROUTINE
- 
- 
- !>******************************************************************************
- !> PotentialTerm evaluates the entries of the P(c,t) operator and the DP(c,t) matrix
- !> at a fixed time step.
- !> -------------
- !> Params:
- !> -------------
- !> x,y:                 spatial coordinates
- !> NEL:                 current element
- !> nop:                 local to global node numbering
- !> timePoint:           time point
- !> c:                   order parameter
- !> P:                   Non-linear term of the weak formulation
- !> DP:                  Derivative of the non-linear term
- !>******************************************************************************
- 
- 
- SUBROUTINE PotentialTerm(x,y,element,nop,timepoint,c,f,J)
-    use, intrinsic :: iso_fortran_env
-    IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
- 
- 
- 
-    !> Space coordinates !xpt,ypt
-    REAL(real64), INTENT(IN) :: x(NNmax),y(NNmax)
- 
-    !> Current element
-    INTEGER element
- 
-    !> Local to global space numbering
-    INTEGER nop(NELmax,NNref)
-    INTEGER ngl(NNref)
- 
-    !> timepoint
-    INTEGER timepoint
- 
-    !> Order parameter - c - of the Cahn Hilliard Equation
-    REAL(real64) c(NNmax,Tmax)
- 
- 
-    !> non linear term
-    REAL(real64) f(NNmax,Tmax)
- 
-    !> Derivative of the non-linear term
-    REAL(real64) J(NNmax,NNmax,Tmax)
- 
- 
- 
- 
-    REAL(real64) phi(NNref), tphx(NNref), tphy(NNref),phic(NNref),phie(NNref)
-    REAL(real64) gp(3), gw(3)
-    REAL(real64) Xdomain,Xc,Xe,Ydomain,Yc,Ye,dett
- 
-    REAL(real64) ci,cx,cy
-    INTEGER i,r,k,l,m,n
- 
- 
- 
-    gw  =(/0.27777777777778, 0.444444444444, 0.27777777777778/)
-    gp =(/0.1127016654    , 0.5           , 0.8872983346    /)
- 
-    DO i = 1,NNref
-       ngl(i) = nop(element,i)
-    ENDDO
+   INTEGER :: i,n,m
 
-    ! Loop over qauss points
-    DO r = 1,3
-       DO k = 1,3
+
+
+   DO i = 1, NNmax
+     CALL RANDOM_NUMBER(u_old(i))
+     u_old(i) = 0.4_real64 + 0.02_real64*(0.5_real64-u_old(i))
+     w_old(i) = 0.0_real64
+   ENDDO
+
  
-          call TestFunctions(gp(r),gp(k),phi,phic,phie)
- 
-          ! Defines the domain domain coordinates and the 2-dimensional Jacobian dett
-          Xdomain=0.0_real64
-          Xc=0.0_real64
-          Xe=0.0_real64
-          Ydomain=0.0_real64
-          Yc=0.0_real64
-          Ye=0.0_real64
-          DO n=1,NNref
-             Xdomain= Xdomain + x(ngl(n)) * phi(n)
-             Xc= Xc + x(ngl(n)) * phic(n)
-             Xe= Xe + x(ngl(n)) * phie(n)
-             Ydomain= Ydomain + y(ngl(n)) * phi(n)
-             Yc= Yc + y(ngl(n)) * phic(n)
-             Ye= Ye + y(ngl(n)) * phie(n)
-          ENDDO
-          dett=Xc*Ye-Xe*Yc
- 
-          DO i=1,NNref
-             tphx(i)=(Ye*phic(i)-Yc*phie(i))/dett
-             tphy(i)=(Xc*phie(i)-Xe*phic(i))/dett
-          ENDDO
- 
- 
-          ci = 0.0_real64
-          cx = 0.0_real64
-          cy = 0.0_real64
-          DO i=1,NNref
-             ci = ci + c(ngl(i),timePoint-1)*phi(i)
-             cx = cx + c(ngl(i),timePoint-1)*tphx(i)
-             cy = cy + c(ngl(i),timePoint-1)*tphy(i)
-          ENDDO
- 
-          DO l=1,NNref
-             DO m=1,NNref
-                J(ngl(l),ngl(m),timepoint) =  J(ngl(l),ngl(m),timepoint) + gw(r)*gw(k)*dett*((3.0_real64)*(ci**2) - 1.0_real64)*phi(l)*phi(m)
-             ENDDO
-             f(ngl(l),timepoint) = f(ngl(l),timepoint) + gw(r)*gw(k)*dett*(ci**3 - ci)*phi(l)
-          ENDDO
- 
-       ENDDO
-    ENDDO
- 
- END SUBROUTINE PotentialTerm
- 
- 
- 
- !>******************************************************************************
- !> Constructs the stationary system of each Newton procedure cycle
- !> .
- !> -------------
- !> Params:
- !> -------------
- !> timepoint:           the current time point
- !> c:                   Order parameter
- !> w:                   Chemical Potential
- !> STIFF,MASS:          System matrices
- !> P:                   Non-linear term of the weak formulation
- !> DP:                  Derivative of the non-linear term of the weak formulation
- !> fjac:                jacobian matrix of newton procedure
- !> fvec:                system of equations of newton procedure
- !>*********************************************************************************
- 
- 
- SUBROUTINE StationarySystemPER(timePoint,cper,wper,STIFFper,MASSper,fper,Jper,fjacper,fvecper)
-    use, intrinsic :: iso_fortran_env
-    IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
- 
-    !> Current time step
-    INTEGER timepoint
- 
-    !> Order parameter - c - of the Cahn Hilliard Equation
-    REAL(real64) cper(NNp,Tmax)
- 
-    !> Auxiliary variable - w - the chemical potential
-    REAL(real64) wper(NNp,Tmax)
- 
- 
-    !> System matrices
-    !> STIFF - Stiffness
-    !> MASS - Mass
-    REAL(real64) STIFFper(NNp,NNp)
- 
-    REAL(real64) MASSper(NNp,NNp)
- 
- 
-    !> non linear term
-    REAL(real64) fper(NNp,Tmax)
- 
-    !> Derivative of the non-linear term
-    REAL(real64) Jper(NNp,NNp,Tmax)
- 
- 
- 
- 
-    !> Jacobian matix of Newton system
-    REAL(real64) fjacper(2*NNp,2*NNp)
-    !> Righ handside vector of Newton system
-    REAL(real64) fvecper(2*NNp)
- 
- 
-    INTEGER m,n
- 
-    REAL(real64) e2
- 
-    e2 = (e)**2
- 
- 
-    !*************************************
-    !> PERIODIC PROBLEM
-    !*************************************
-    DO m=1,NNp
-       DO n=1,NNp
-          fvecper(m)= fvecper(m) + MASSper(m,n)*wper(n,timepoint) - (e2)*(STIFFper(m,n))*cper(n,timepoint)
-          fjacper(m,n)= fjacper(m,n) + MASSper(m,n)
- 
-       ENDDO
-       fvecper(m) = fvecper(m)  - fper(m,timepoint)
- 
-       DO n= NNp+1,2*NNp
-          fjacper(m,n)=  fjacper(m,n) - (e2)*(STIFFper(m,n-NNp)) - Jper(m,n-NNp,timepoint)
- 
-       ENDDO
-    ENDDO
- 
-    DO m=NNp+1,2*NNP
-       DO n=1,NNp
-          fvecper(m)= fvecper(m) - MASSper(m-NNp,n)*cper(n,timePoint-1)+ (dt)*(STIFFper(m-NNp,n))*wper(n,timepoint) + MASSper(m-NNp,n)*cper(n,timePoint)
- 
-          fjacper(m,n)= fjacper(m,n) + (dt)*(STIFFper(m-NNp,n))
- 
-       ENDDO
- 
- 
-       DO n= NNp+1,2*NNp
-          fjacper(m,n)= fjacper(m,n) + MASSper(m-NNp,n-NNp)
- 
-       ENDDO
-    ENDDO
- 
- 
- 
- END SUBROUTINE
- 
- 
- 
+
+END SUBROUTINE InitialConditions
+
+
   !>******************************************************************************
   !> TestFunctions initializes the test functions for the given point.
   !> -------------
@@ -1283,7 +490,7 @@ ENDDO
  SUBROUTINE TestFunctions(x,y,phi,phic,phie)
     use, intrinsic :: iso_fortran_env
     IMPLICIT NONE
-    INCLUDE 'CHParameters.inc'
+    INCLUDE 'PARAMETERS_PERIODIC.inc'
  
     !> Point at which to form the test functions
     REAL(real64),DIMENSION(NNref):: phi,phic,phie
@@ -1338,4 +545,158 @@ ENDDO
  END SUBROUTINE TestFunctions
  
  
+ SUBROUTINE AssembleSystem(x,y,element,nop,u_old,u_new,w_new,fjac1,fjac2,fjac3,fjac4,fvec1,fvec2)
+   use, intrinsic :: iso_fortran_env
+   IMPLICIT NONE
+   INCLUDE 'PARAMETERS_PERIODIC.inc'
+
+
+
+   !> Space coordinates !xpt,ypt
+   REAL(real64), INTENT(IN) :: x(NNmax),y(NNmax)
+
+   !> Current element
+   INTEGER element
+
+   !> Local to global space numbering
+   INTEGER nop(NELmax,NNref)
+   INTEGER ngl(NNref)
+
+   !> Order parameter - c - of the Cahn Hilliard Equation
+   REAL(real64) u_new(NNmax)
+   REAL(real64) u_old(NNmax)
+   REAL(real64) w_new(NNmax)
  
+
+ 
+   !> Local contributions
+   REAL(real64) fjac1(NNmax,NNmax)
+   REAL(real64) fjac2(NNmax,NNmax)
+   REAL(real64) fjac3(NNmax,NNmax)
+   REAL(real64) fjac4(NNmax,NNmax)
+   
+   REAL(real64) fvec1(NNmax)
+   REAL(real64) fvec2(NNmax)
+
+
+
+   REAL(real64) phi(NNref), tphx(NNref), tphy(NNref),phic(NNref),phie(NNref)
+   REAL(real64) gp(3), gw(3)
+   REAL(real64) Xdomain,Xc,Xe,Ydomain,Yc,Ye,dett
+
+   REAL(real64) u0i,ui,ux,uy,wi,wx,wy
+   INTEGER i,r,k,l,m,n
+
+
+
+   gw  =(/0.27777777777778, 0.444444444444, 0.27777777777778/)
+   gp =(/0.1127016654    , 0.5           , 0.8872983346    /)
+
+   DO i = 1,NNref
+      ngl(i) = nop(element,i)
+   ENDDO
+
+   ! Loop over qauss points
+   DO r = 1,3
+      DO k = 1,3
+
+         call TestFunctions(gp(r),gp(k),phi,phic,phie)
+
+         ! Defines the domain domain coordinates and the 2-dimensional Jacobian dett
+         Xdomain=0.0_real64
+         Xc=0.0_real64
+         Xe=0.0_real64
+         Ydomain=0.0_real64
+         Yc=0.0_real64
+         Ye=0.0_real64
+         DO n=1,NNref
+            Xdomain= Xdomain + x(ngl(n)) * phi(n)
+            Xc= Xc + x(ngl(n)) * phic(n)
+            Xe= Xe + x(ngl(n)) * phie(n)
+            Ydomain= Ydomain + y(ngl(n)) * phi(n)
+            Yc= Yc + y(ngl(n)) * phic(n)
+            Ye= Ye + y(ngl(n)) * phie(n)
+         ENDDO
+         dett=Xc*Ye-Xe*Yc
+
+         DO i=1,NNref
+            tphx(i)=(Ye*phic(i)-Yc*phie(i))/dett
+            tphy(i)=(Xc*phie(i)-Xe*phic(i))/dett
+         ENDDO
+
+         u0i = 0.0_real64
+         ui = 0.0_real64
+         ux = 0.0_real64
+         uy = 0.0_real64
+         wi = 0.0_real64
+         wx = 0.0_real64
+         wy = 0.0_real64
+         DO i=1,NNref
+            u0i = u0i + u_old(ngl(i))*phi(i)
+            ui = ui + u_new(ngl(i))*phi(i) 
+            ux = ux + u_new(ngl(i))*tphx(i)
+            uy = uy + u_new(ngl(i))*tphy(i)
+         ENDDO
+         DO i=1,NNref
+            wi = wi + w_new(ngl(i))*phi(i) 
+            wx = wx + w_new(ngl(i))*tphx(i)
+            wy = wy + w_new(ngl(i))*tphy(i)
+         ENDDO
+         
+        !*********************************
+        !W = 100c**2(1-c)**2 FENICS
+        !*********************************  
+         ! DO l=1,NNref
+         !   f(ngl(l)) = f(ngl(l)) + gw(r)*gw(k)*dett*(100.0)*(ui**2)*(( 1.0 - ui)**2)*phi(l)
+         !    DO m=1,NNref
+         !       J(ngl(l),ngl(m)) =  J(ngl(l),ngl(m)) + gw(r)*gw(k)*dett*(200.0)*(ui*(1.0-ui)*(1.0-2.0*ui))*phi(l)*phi(m)
+         !    ENDDO
+         ! ENDDO
+
+        !***************************************************
+        !W = 0.25(c**2-1)**2 ginzburg landau 
+        !*************************************************** 
+        !  DO l=1,NNref
+        !    f(ngl(l)) = f(ngl(l)) + gw(r)*gw(k)*dett*(ui**3 - ui)*phi(l)
+        !    DO m=1,NNref
+        !       J(ngl(l),ngl(m)) =  J(ngl(l),ngl(m)) + gw(r)*gw(k)*dett*((3.0_real64)*(ui**2) - 1.0_real64)*phi(l)*phi(m)
+        !    ENDDO
+        ! ENDDO
+        
+        !****************************************************
+        !W = 0.25(c**2-1)**2 ginzburg landau & convex splitting
+        !**************************************************** 
+        ! DO l=1,NNref
+        !    f(ngl(l)) = f(ngl(l)) + gw(r)*gw(k)*dett*(ui**3)*phi(l)
+        !    DO m=1,NNref
+        !       J(ngl(l),ngl(m)) =  J(ngl(l),ngl(m)) + gw(r)*gw(k)*dett*((3.0_real64)*(ui**2))*phi(l)*phi(m)
+        !    ENDDO
+        ! ENDDO
+
+        
+         DO l=1,NNref
+            
+            fvec1(ngl(l)) = fvec1(ngl(l)) + gw(r)*gw(k)*dett*wi*phi(l) -gw(r)*gw(k)*dett*(2.0_real64*ui - 6.0_real64*ui**2 + 4.0_real64*ui**3 )*phi(l) &
+             -(e)**2*gw(r)*gw(k)*dett*(ux*tphx(l)+uy*tphy(l))
+            
+               fvec2(ngl(l)) = fvec2(ngl(l)) + gw(r)*gw(k)*dett*ui*phi(l) - gw(r)*gw(k)*dett*u0i*phi(l) &
+               + 1.0*(dt)*gw(r)*gw(k)*dett*(wx*tphx(l)+wy*tphy(l)) 
+               
+            DO m=1,NNref
+               
+                  fjac1(ngl(l),ngl(m)) = fjac1(ngl(l),ngl(m)) + gw(r)*gw(k)*dett*phi(l)*phi(m)
+               
+                  fjac2(ngl(l),ngl(m)) = fjac2(ngl(l),ngl(m)) -(e)**2*gw(r)*gw(k)*dett*(tphx(l)*tphx(m)+tphy(l)*tphy(m)) &
+                  - gw(r)*gw(k)*dett*((2.0_real64 - 12.0_real64*ui+ 12.0_real64*ui**2))*phi(l)*phi(m)
+               
+                  fjac3(ngl(l),ngl(m)) = fjac3(ngl(l),ngl(m)) + (dt)*gw(r)*gw(k)*dett*(tphx(l)*tphx(m)+tphy(l)*tphy(m))
+               
+                  fjac4(ngl(l),ngl(m)) = fjac4(ngl(l),ngl(m)) + gw(r)*gw(k)*dett*phi(l)*phi(m)
+                  
+            ENDDO
+         ENDDO   
+      ENDDO
+   ENDDO
+
+
+END SUBROUTINE AssembleSystem

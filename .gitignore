@@ -1,4 +1,4 @@
 */lapack*
 *.mod
-*.dat
 *.out
+.venv

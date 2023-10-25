@@ -2,10 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-title = "90 Periodic"
-file = "./results/periodic/90_PER.dat"
-nnx = 11
-nny = 11
+title = "final"
+file = "./results/neuman/final_NEUMANN_20231013_20_18.dat"
+nnx = 21
+nny = 21
 
 def plot():
         extendedC = readFromFile()

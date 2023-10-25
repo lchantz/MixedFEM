@@ -53,12 +53,18 @@ contains
 
         it = 0
         do while(norm_r .GT. e*norm_b)                          !-------> START OF LOOP
-
+            
         !-------------------------------------------------------!
             rho_prev = rho                                   !-------> LINE 5
             rho      = dot_product(rs,r)                        !
         !-------------------------------------------------------!
-            beta     = (rho/rho_prev) * (alpha/omega)           !-------> LINE 6
+            if (rho_prev == 0.0_real64) then
+                beta = 0.0_real64
+            else
+                beta = (rho/rho_prev) * (alpha/omega)
+            end if
+            
+            ! beta     = (rho/rho_prev) * (alpha/omega)           !-------> LINE 6
         !-------------------------------------------------------!
             p        = r + beta * (p - omega*v)                 !-------> LINE 7
         !-------------------------------------------------------!
