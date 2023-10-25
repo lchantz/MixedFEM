@@ -1,0 +1,61 @@
+\begin{thebibliography}{10}
+
+\bibitem{Cahn1958FreeEO}
+J.~W. Cahn and J.~E. Hilliard, ``Free energy of a nonuniform system. i.
+  interfacial free energy,'' {\em Journal of Chemical Physics}, vol.~28,
+  pp.~258--267, 1958.
+
+\bibitem{CAHN1961795}
+J.~W. Cahn, ``On spinodal decomposition,'' {\em Acta Metallurgica}, vol.~9,
+  no.~9, pp.~795--801, 1961.
+
+\bibitem{BADALASSI2003371}
+V.~Badalassi, H.~Ceniceros, and S.~Banerjee, ``Computation of multiphase
+  systems with phase field models,'' {\em Journal of Computational Physics},
+  vol.~190, no.~2, pp.~371--397, 2003.
+
+\bibitem{0a06993046834526b042d6c742445fc9}
+J.~Zhu, L.~Chen, and J.~Shen, ``Morphological evolution during phase separation
+  and coarsening with strong inhomogeneous elasticity,'' {\em Modelling and
+  Simulation in Materials Science and Engineering}, vol.~9, pp.~499--511, Nov.
+  2001.
+
+\bibitem{MOHAMMADI2019919}
+V.~Mohammadi and M.~Dehghan, ``Simulation of the phase field cahn–hilliard
+  and tumor growth models via a numerical scheme: Element-free galerkin
+  method,'' {\em Computer Methods in Applied Mechanics and Engineering},
+  vol.~345, pp.~919--950, 2019.
+
+\bibitem{article}
+S.~Zhou and M.~Wang, ``Multimaterial structural topology optimization with a
+  generalized cahn–hilliard model of multiphase transition,'' {\em Structural
+  and Multidisciplinary Optimization}, vol.~33, pp.~89--111, 02 2007.
+
+\bibitem{Elliott1989}
+C.~M. Elliott, {\em The Cahn-Hilliard Model for the Kinetics of Phase
+  Separation}, pp.~35--73.
+\newblock Basel: Birkh{\"a}user Basel, 1989.
+
+\bibitem{inbook}
+H.~Gomez and K.~van~der Zee, {\em Computational Phase‐Field Modeling}.
+\newblock 11 2015.
+
+\bibitem{Elliott1993TheGD}
+C.~M. Elliott and A.~M. Stuart, ``The global dynamics of discrete semilinear
+  parabolic equations,'' {\em SIAM Journal on Numerical Analysis}, vol.~30,
+  pp.~1622--1663, 1993.
+
+\bibitem{Eyre1998UnconditionallyGS}
+D.~J. Eyre, ``Unconditionally gradient stable time marching the cahn-hilliard
+  equation,'' {\em MRS Proceedings}, vol.~529, p.~39, 1998.
+
+\bibitem{Wu2011PreconditionersFT}
+X.~Wu, ``Preconditioners for the discrete cah-hilliard equation in three space
+  dimensions,'' 2011.
+
+\bibitem{LI20171855}
+Y.~Li, Y.~Choi, and J.~Kim, ``Computationally efficient adaptive time step
+  method for the cahn–hilliard equation,'' {\em Computers \& Mathematics with
+  Applications}, vol.~73, no.~8, pp.~1855--1864, 2017.
+
+\end{thebibliography}

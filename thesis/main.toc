@@ -1,0 +1,62 @@
+\contentsline {section}{\numberline {1}The basic framework of the Phase Field Model}{6}%
+\contentsline {section}{\numberline {2}The Cahn-Hilliard Equation with natural conditions }{8}%
+\contentsline {subsection}{\numberline {2.1}Statement of the problem}{8}%
+\contentsline {subsection}{\numberline {2.2}The weak formulation}{9}%
+\contentsline {subsection}{\numberline {2.3}The finite element discretization}{9}%
+\contentsline {subsection}{\numberline {2.4}The semi-discrete approximation}{11}%
+\contentsline {subsection}{\numberline {2.5}The fully dicrete problem}{11}%
+\contentsline {section}{\numberline {3}The temporal discretization}{12}%
+\contentsline {subsection}{\numberline {3.1}First-order accurate schemes}{13}%
+\contentsline {subsubsection}{\numberline {3.1.1}Backward Euler}{13}%
+\contentsline {subsubsection}{\numberline {3.1.2}First-order semi-implicit method}{14}%
+\contentsline {subsubsection}{\numberline {3.1.3}Convex-Splitting Method}{15}%
+\contentsline {subsection}{\numberline {3.2}Stability and Solvability Analysis for Second-order Schemes}{16}%
+\contentsline {subsubsection}{\numberline {3.2.1}Crank–Nicolson Method}{16}%
+\contentsline {subsubsection}{\numberline {3.2.2}Second-order Semi-implicit Method}{16}%
+\contentsline {subsubsection}{\numberline {3.2.3}Secant Method}{16}%
+\contentsline {subsubsection}{\numberline {3.2.4}Second-order Convex Splitting}{17}%
+\contentsline {subsection}{\numberline {3.3}Stabilization}{18}%
+\contentsline {section}{\numberline {4}The Newton-Raphson procedure}{18}%
+\contentsline {section}{\numberline {5}The algorithm for the Neumann case}{20}%
+\contentsline {subsection}{\numberline {5.1}Results}{22}%
+\contentsline {section}{\numberline {6}The periodic problem}{24}%
+\contentsline {subsection}{\numberline {6.1}Statement of the problem}{24}%
+\contentsline {subsection}{\numberline {6.2}The weak formulation}{25}%
+\contentsline {subsection}{\numberline {6.3}The finite dimensional projection of the solution}{25}%
+\contentsline {subsection}{\numberline {6.4}The system's matrices}{27}%
+\contentsline {subsection}{\numberline {6.5}The nonlinear term}{28}%
+\contentsline {subsection}{\numberline {6.6}The boundary flux matrix}{28}%
+\contentsline {subsection}{\numberline {6.7}The algorithm for the periodic problem}{29}%
+\contentsline {subsubsection}{\numberline {6.7.1}Results}{31}%
+\contentsline {section}{\numberline {7}Phase-field model for wetting phenomena}{33}%
+\contentsline {subsection}{\numberline {7.1}Statement of the problem}{33}%
+\contentsline {subsection}{\numberline {7.2}The weak formulation}{34}%
+\contentsline {subsection}{\numberline {7.3}The temporal discretization and the algorithm}{34}%
+\contentsline {subsubsection}{\numberline {7.3.1}Results}{34}%
+\contentsline {section}{\numberline {8}The implementation}{37}%
+\contentsline {subsection}{\numberline {8.1}Dependencies}{37}%
+\contentsline {subsection}{\numberline {8.2}Program Components}{37}%
+\contentsline {subsection}{\numberline {8.3}Space and Time Coordinates}{37}%
+\contentsline {subsection}{\numberline {8.4}Local to Global Node Numbering}{37}%
+\contentsline {subsection}{\numberline {8.5}Order Parameter Variables}{37}%
+\contentsline {subsection}{\numberline {8.6}Chemical Potential Variables}{37}%
+\contentsline {subsection}{\numberline {8.7}Newton Tolerance Parameters}{37}%
+\contentsline {subsection}{\numberline {8.8}Stationary System of Newton Cycle}{38}%
+\contentsline {subsection}{\numberline {8.9}Local Contributions}{38}%
+\contentsline {subsection}{\numberline {8.10}Newton Solution Vector}{38}%
+\contentsline {subsection}{\numberline {8.11}Loop Variables}{38}%
+\contentsline {subsection}{\numberline {8.12}Convergence Check}{38}%
+\contentsline {subsection}{\numberline {8.13}File Handling}{38}%
+\contentsline {subsection}{\numberline {8.14}Program Execution}{38}%
+\contentsline {section}{\numberline {9}NEUMANN.f90}{39}%
+\contentsline {subsection}{\numberline {9.1}Space Discretization}{42}%
+\contentsline {subsection}{\numberline {9.2}Global Node Numbering}{43}%
+\contentsline {subsection}{\numberline {9.3}Time Discretization}{43}%
+\contentsline {subsection}{\numberline {9.4}Initial Conditions}{44}%
+\contentsline {subsection}{\numberline {9.5}The system of each Newton cycle}{45}%
+\contentsline {subsection}{\numberline {9.6}The test functions}{48}%
+\contentsline {section}{\numberline {10}PERIODIC.f90}{49}%
+\contentsline {section}{\numberline {11}CONTACTANGLE.f90}{53}%
+\contentsline {section}{\numberline {12}Future directions for the development of the code}{61}%
+\contentsline {subsubsection}{\numberline {12.0.1}Adaptive time stepping}{61}%
+\contentsline {subsubsection}{\numberline {12.0.2} Broyden’s Method}{62}%
